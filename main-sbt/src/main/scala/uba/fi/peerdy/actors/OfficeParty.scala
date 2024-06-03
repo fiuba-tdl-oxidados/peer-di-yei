@@ -1,10 +1,13 @@
 package uba.fi.peerdy.actors
 
-import akka.actor.typed.scaladsl.Behaviors
-import akka.actor.typed.{ActorRef, Behavior}
+import akka.NotUsed
+import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
+import akka.actor.typed.{ActorRef, Behavior, Terminated}
 
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
+import uba.fi.peerdy.actors.rocola.Rocola
+import uba.fi.peerdy.actors.rocola.Rocola.{PlaySessionCommand, RocolaCommand}
 
 object OfficeParty {
   sealed trait PartyCommand
@@ -35,9 +38,37 @@ object OfficeParty {
 
   private final case class PublishSessionMessage(screenName: String, message: String) extends PartyCommand
 
-  def apply(): Behavior[PartyCommand] =
-    officeParty(List.empty)
+  def apply(): Behavior[NotUsed] =
+    Behaviors.receive { (context, message) =>
+      val handlerRef = context.spawn(RocolaHandler(), "handler")
+      val rocola = context.spawn(Rocola(), "rocola")
+      context.watch(handlerRef)
 
+      rocola ! Rocola.StartPlaySession("rocola", handlerRef)
+
+      Behaviors.receiveSignal {
+        case (_, Terminated(_)) =>
+          Behaviors.stopped
+      }
+    }
+
+  private object RocolaHandler {
+    import Rocola._
+
+    def apply(): Behavior[PlaySessionEvent] =
+      Behaviors.setup { context =>
+        Behaviors.receiveMessage {
+          case PlaySessionDenied(reason) =>
+            context.log.info("cannot start chat room session: {}", reason)
+            Behaviors.stopped
+          case PlaySessionStarted(handle) =>
+            handle ! PostPlayMessage("Hello World!")
+            Behaviors.same
+          case PlayMessagePosted(clientName, message) =>
+            context.log.info("message has been posted by '{}': {}", clientName, message)
+            Behaviors.stopped
+        }
+      }
 
   private def officeParty(sessions: List[ActorRef[PartySessionCommand]]): Behavior[PartyCommand] =
     Behaviors.receive { (context, message) =>
@@ -70,5 +101,5 @@ object OfficeParty {
         client ! message
         Behaviors.same
     }
-
+  }
 }

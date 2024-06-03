@@ -7,13 +7,16 @@ import akka.actor.typed.ActorSystem
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.Behaviors
 import uba.fi.peerdy.actors.OfficeParty
+import uba.fi.peerdy.actors.rocola.Rocola
 //#imports
 
 object OfficePartyHall {
 
   def apply(): Behavior[NotUsed] =
     Behaviors.setup { context =>
-      val office = context.spawn(OfficeParty(), "chatroom")
+      val officeParty = context.spawn(OfficeParty(), "officeParty")
+      //TODO: understand how to mix behaviors in the same actor
+      officeParty ! NotUsed
       Behaviors.empty
     }
 
