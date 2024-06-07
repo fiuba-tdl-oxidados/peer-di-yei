@@ -39,4 +39,42 @@ object Rocola {
   def apply(): Behavior[PlaySessionCommand] =
     Behaviors.setup(context => new AuthenticationBehavior(context))
 
+  class Rocola {
+    def play(): Unit = {
+      println("Playing")
+    }
+    def pause(): Unit = {
+      println("Paused")
+    }
+    def stop(): Unit = {
+      println("Stopped")
+    }
+    def skip(): Unit = {
+      println("Skipped")
+    }
+    def volumeUp(): Unit = {
+      println("Volume Up")
+    }
+    def volumeDown(): Unit = {
+      println("Volume Down")
+    }
+    def mute(): Unit = {
+      println("Muted")
+    }
+    def unmute(): Unit = {
+      println("Unmuted")
+    }
+    def setVolume(volume: Int): Unit = {
+      println(s"Volume set to $volume")
+    }
+    def setPlaylist(): Unit = {
+      println("Playlist set")
+    }
+    def postPlayMessage(message: String): Unit = {
+      println(s"Message posted: $message")
+    }
+    def notifyDiYei(message: PlayMessagePosted): Unit = {
+      println(s"Message notified: $message")
+    }
+  }
 }
