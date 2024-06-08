@@ -26,8 +26,10 @@ class AuthenticationBehavior (context: ActorContext[PlaySessionCommand]) extends
             val ses = context.spawn(
               PlayingBehavior(context.self, clientName, client),
               name = URLEncoder.encode(clientName, StandardCharsets.UTF_8.name))
-            client ! PlaySessionStarted(currentSession.get)
             currentSession = Some(ses)
+
+            client ! PlaySessionStarted(currentSession.get)
+
           } else {
             val reason = "Another session is already in progress. Only one session is allowed at a time."
             client ! PlaySessionDenied(reason)

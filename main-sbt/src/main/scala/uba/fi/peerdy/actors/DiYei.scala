@@ -1,13 +1,19 @@
 package uba.fi.peerdy.actors
 
-import akka.actor.typed.Behavior
-import akka.actor.typed.scaladsl.Behaviors
-import uba.fi.peerdy.actors.rocola.Rocola.Rocola
+import akka.actor.typed.{ActorRef, Behavior, Signal}
+import akka.actor.typed.scaladsl.{AbstractBehavior, ActorContext, Behaviors}
+import uba.fi.peerdy.actors.DiYei.rocola
+import uba.fi.peerdy.actors.rocola.Rocola
+import uba.fi.peerdy.actors.rocola.Rocola.{NotifyDiYei, PlayMessagePosted, PlaySessionCommand, PlaySessionDenied, PlaySessionStarted, PublishPlaySessionMessage, Rocola, StartPlaySession}
+import uba.fi.peerdy.actors.rocola.behavior.PlayingBehavior
+
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 
 object DiYei {
 
   sealed trait DiYeiCommand
-  final case class ProposeSong() extends DiYeiCommand
+  final case class ProposeSong(sender: String,song: String) extends DiYeiCommand
   final case class UpVoteSong() extends DiYeiCommand
   final case class DownVoteSong() extends DiYeiCommand
 
@@ -18,17 +24,27 @@ object DiYei {
   final case class PlaylistUpdated() extends DiYeiEvents
   final case class CurrentSongUpdated() extends DiYeiEvents
 
-  def apply(): Behavior[DiYeiCommand] = {
-    rockDj(Option.empty)
-  }
+  private var rocola: Option[ActorRef[Rocola.PlaySessionCommand]]= Option.empty
 
-  private def rockDj(rocola:Option[Rocola]) : Behavior[DiYeiCommand] = {
+  def apply(): Behavior[DiYeiCommand] = {
     Behaviors.receive { (context, message) =>
+      rocola match {
+        case None =>
+          context.log.info("No Rocola available, creating...")
+          rocola = Option {
+            context.spawn(Rocola(), "diyeiRocola")
+          }
+          val handler = context.spawn(RocolaHandler(), "diyeiRocolaHandler")
+          rocola.get ! Rocola.StartPlaySession("DiYei", handler)
+
+      }
+
       message match {
-        case ProposeSong() =>
+        case ProposeSong(sender:String, song:String) =>
           rocola match {
             case Some(_) =>
-              context.log.info("Proposing song")
+              context.log.info(s"$sender is proposing song $song")
+              rocola.get ! Rocola.PublishPlaySessionMessage("DiYei", song)
               Behaviors.same
             case None =>
               context.log.info("No Rocola available")
@@ -55,4 +71,28 @@ object DiYei {
       }
     }
   }
+
+  private object RocolaHandler
+  {
+    def apply(): Behavior[Rocola.PlaySessionEvent] = {
+      Behaviors.receive { (context, message) =>
+        message match {
+          case Rocola.PlaySessionStarted(handle) =>
+            context.log.info("Play session started")
+            Behaviors.same
+          case Rocola.PlaySessionEnded() =>
+            context.log.info("Play session ended")
+            Behaviors.same
+          case Rocola.PlaySessionDenied(reason) =>
+            context.log.info(s"Play session denied: $reason")
+            Behaviors.same
+          case Rocola.PlayMessagePosted(clientName, message) =>
+            context.log.info(s"Message posted by $clientName: $message")
+            Behaviors.same
+        }
+      }
+    }
+  }
+
+
 }
