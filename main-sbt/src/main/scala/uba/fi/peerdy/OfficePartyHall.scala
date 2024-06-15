@@ -49,6 +49,7 @@ object OfficePartyHall {
         case NewDiYeiAccepted(handle) =>
           context.log.info("DiYei accepted")
           diyeiProxy = Option(handle)
+          commandList()
           while (true) {
             val input = scala.io.StdIn.readLine()
             if (input == "exit") {
@@ -77,20 +78,37 @@ object OfficePartyHall {
   //TODO: implement here full implementation for handing interaction with user as a Diyei
   private def translateDiYeiCommand(str: String): Unit = {
     str match {
+      case "commands" =>
+        commandList()
       case "propose" =>
+        println("Enter song name:")
         val song = scala.io.StdIn.readLine()
+        println("Enter artist name:")
         val artist = scala.io.StdIn.readLine()
         println(s"Proposing song: $song from artist: $artist")
-
-        println(s"Proposing song: $song")
         diyeiProxy.get ! DiYei.ProposeSong("DiYei",song,artist)
       case "upvote" =>
+        println("Enter song name: ")
+        val song: String = scala.io.StdIn.readLine()
+        diyeiProxy.get ! DiYei.UpVoteSong(song)
         println("Upvoting song")
       case "downvote" =>
+        println("Enter song name: ")
+        val song: String = scala.io.StdIn.readLine()
+        diyeiProxy.get ! DiYei.DownVoteSong(song)
         println("Downvoting song")
       case _ =>
         println("Invalid command")
     }
+  }
+
+  private def commandList(): Unit = {
+    println("Available commands:")
+    println("propose - Propose a song")
+    println("upvote - Upvote a song")
+    println("downvote - Downvote a song")
+    println("commands - List available commands")
+    println("exit - Exit the system")
   }
 
 }

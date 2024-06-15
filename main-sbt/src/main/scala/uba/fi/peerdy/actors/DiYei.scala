@@ -16,8 +16,8 @@ object DiYei {
 
   sealed trait DiYeiCommand
   final case class ProposeSong(sender: String,song: String, artist:String) extends DiYeiCommand
-  final case class UpVoteSong() extends DiYeiCommand
-  final case class DownVoteSong() extends DiYeiCommand
+  final case class UpVoteSong(song: String) extends DiYeiCommand
+  final case class DownVoteSong(song: String) extends DiYeiCommand
 
   sealed trait DiYeiEvents
   final case class NewSongAccepted() extends DiYeiEvents
@@ -56,7 +56,7 @@ object DiYei {
               context.log.info("No Rocola available")
               Behaviors.same
           }
-        case UpVoteSong() =>
+        case UpVoteSong(song: String) =>
           rocola match {
             case Some(_) =>
               context.log.info("Upvoting song")
@@ -66,7 +66,7 @@ object DiYei {
               context.log.info("No Rocola available")
               Behaviors.same
           }
-        case DownVoteSong() =>
+        case DownVoteSong(song: String) =>
           rocola match {
             case Some(_) =>
               context.log.info("Downvoting song")

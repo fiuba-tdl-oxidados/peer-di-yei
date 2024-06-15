@@ -20,7 +20,7 @@ object Listener {
   def apply(dj: ActorRef[DiYei.DiYeiCommand]): Behavior[ListenerCommand] = Behaviors.receive { (context, message) =>
     message match {
       case RequestPlaylist(replyTo) =>
-        dj ! DiYei.ProposeSong("listener", "request playlist")
+        dj ! DiYei.ProposeSong("listener", "request playlist", "artist")
         replyTo ! PlaylistResponse(List("Song1", "Song2"))
         Behaviors.same
       case VoteSong(songId, vote, replyTo) =>
@@ -28,7 +28,7 @@ object Listener {
         replyTo ! VoteResponse(success = true)
         Behaviors.same
       case ProposeSong(song, replyTo) =>
-        dj ! DiYei.ProposeSong("listener", song)
+        dj ! DiYei.ProposeSong("listener", song, "artist")
         replyTo ! ProposeSongResponse(success = true)
         Behaviors.same
       case RequestDJChange(replyTo) =>
