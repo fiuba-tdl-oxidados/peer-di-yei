@@ -1,20 +1,32 @@
 package uba.fi.peerdy
 
-//#imports
 import akka.NotUsed
+import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, ActorSystem, Behavior, Terminated}
-import akka.actor.typed.scaladsl.Behaviors
-import akka.actor.typed.scaladsl.Behaviors
 import uba.fi.peerdy.actors.DiYei.DiYeiCommand
-import uba.fi.peerdy.actors.OfficeParty.{NewDiYeiAccepted, NewDiYeiDenied, NewListenerAccepted, NewListenerDenied, PartySessionEvent, StartPlaying}
+import uba.fi.peerdy.actors.OfficeParty._
 import uba.fi.peerdy.actors.{DiYei, OfficeParty}
 
-//#imports
-
+/*
+  * OfficePartyHall is the main actor of the system.
+  * It is responsible for creating the OfficeParty actor and handling the communication
+  * between the DiYei and the listeners.
+  * It also handles the input from the user to interact with the DiYei.
+  * The user can propose a song, upvote a song, or downvote a song.
+  * The user can also exit the system by typing "exit".
+ */
 object OfficePartyHall {
+
+  // The DiYei actor reference wrapped in an Option to handle the case when the DiYei is not available
   private var diyeiProxy:  Option[ActorRef[DiYeiCommand]] = Option.empty
+
+  /* The apply method creates the OfficePartyHall actor
+   * The OfficeParty actor is created and a message is sent to it to start playing
+   * The SessionHandler actor is created to handle the communication between the OfficeParty and the user
+   */
   def apply(): Behavior[NotUsed] =
     Behaviors.setup { context =>
+
       val officeParty = context.spawn(OfficeParty(), "officeParty")
       val handlerRef = context.spawn(SessionHandler(), "handler")
       //TODO: understand how to mix behaviors in the same actor
@@ -27,9 +39,8 @@ object OfficePartyHall {
       }
     }
 
-
   def main(args: Array[String]): Unit = {
-    ActorSystem(OfficePartyHall(), "ChatRoomDemo")
+    ActorSystem(OfficePartyHall(), "OfficePartyHall")
   }
 
   private def SessionHandler(): Behavior[PartySessionEvent] = {
@@ -51,6 +62,7 @@ object OfficePartyHall {
           context.log.info(s"DiYei denied: $reason")
           Behaviors.stopped
         case NewListenerAccepted(handle) =>
+          //TODO: implement here the Listener behavior
           context.log.info("Listener accepted")
           Behaviors.same
         case NewListenerDenied(reason) =>
@@ -62,12 +74,16 @@ object OfficePartyHall {
     }
   }
 
+  //TODO: implement here full implementation for handing interaction with user as a Diyei
   private def translateDiYeiCommand(str: String): Unit = {
     str match {
       case "propose" =>
         val song = scala.io.StdIn.readLine()
+        val artist = scala.io.StdIn.readLine()
+        println(s"Proposing song: $song from artist: $artist")
+
         println(s"Proposing song: $song")
-        diyeiProxy.get ! DiYei.ProposeSong("DiYei",song)
+        diyeiProxy.get ! DiYei.ProposeSong("DiYei",song,artist)
       case "upvote" =>
         println("Upvoting song")
       case "downvote" =>
