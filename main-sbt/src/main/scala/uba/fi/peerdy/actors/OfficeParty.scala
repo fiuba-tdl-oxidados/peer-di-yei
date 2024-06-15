@@ -1,44 +1,71 @@
 package uba.fi.peerdy.actors
 
-import akka.NotUsed
-import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
-import akka.actor.typed.{ActorRef, Behavior, Terminated}
 
+import akka.actor.typed.scaladsl.Behaviors
+import akka.actor.typed.{ActorRef, Behavior}
+import uba.fi.peerdy.actors.DiYei.DiYeiCommand
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
-import uba.fi.peerdy.actors.rocola.Rocola
-import uba.fi.peerdy.actors.rocola.Rocola.{PlaySessionCommand, RocolaCommand}
-import uba.fi.peerdy.actors.DiYei.DiYeiCommand
+
+/*
+ * OfficeParty handles a specific party session once started.
+ * It is responsible for creating the DiYei actor and handling the communication
+ * between the DiYei and the listeners.
+ */
 object OfficeParty {
+
   sealed trait PartyCommand
+
   final case class StartPlaying(replyTo: ActorRef[PartySessionEvent]) extends PartyCommand
+
   final case class StartListening(peerName: String, replyTo: ActorRef[PartySessionEvent]) extends PartyCommand
+
   final case class LeaveParty(peerName: String, replyTo: ActorRef[PartySessionCommand]) extends PartyCommand
 
   sealed trait PartySessionEvent
+
   final case class NewDiYeiAccepted(handle: ActorRef[DiYeiCommand]) extends PartySessionEvent
+
   final case class NewDiYeiDenied(reason: String) extends PartySessionEvent
+
   final case class NewListenerAccepted(handle: ActorRef[PartySessionCommand]) extends PartySessionEvent
+
   final case class NewListenerDenied(reason: String) extends PartySessionEvent
-  final case class MessagePosted(peerName:String, message: String) extends PartySessionEvent
+
+  final case class MessagePosted(peerName: String, message: String) extends PartySessionEvent
 
   sealed trait PartySessionCommand
+
   final case class PostMessage(message: String) extends PartySessionCommand
+
   final case class PostCommand(command: DiYeiCommand) extends PartySessionCommand
+
   private final case class NotifyClient(message: MessagePosted) extends PartySessionCommand
 
   private final case class PublishSessionMessage(peerName: String, message: String) extends PartyCommand
+
   private final case class ExecuteSessionCommand(peerName: String, command: DiYeiCommand) extends PartyCommand
 
+  // using FP to define behavior as a function in this object
   def apply(): Behavior[PartyCommand] = {
     officeParty(Option.empty, List.empty)
   }
 
-
-    private def officeParty(currentDiYei:Option[ActorRef[DiYeiCommand]],sessions: List[ActorRef[PartySessionCommand]]): Behavior[PartyCommand] =
+  /*
+   * The officeParty behavior is the main behavior of the OfficeParty actor.
+   * It handles the messages received by the OfficeParty actor.
+   * The OfficeParty actor can start a new DiYei session or a new listener session.
+   * It can also publish messages to all the listeners in the session.
+   * The OfficeParty actor can also execute commands on the DiYei.
+   */
+  private def officeParty(
+                           currentDiYei: Option[ActorRef[DiYeiCommand]],
+                           sessions: List[ActorRef[PartySessionCommand]]): Behavior[PartyCommand] =
     Behaviors.receive { (context, message) =>
       message match {
         case StartPlaying(client) =>
+          // check whether a currentDiYei is already in place
+          // TODO: here we should check against directory whether this client could act as Diyei if nobody has already started a session
           currentDiYei match {
             case Some(_) =>
               client ! NewDiYeiDenied("Another session is already in progress. Only one session is allowed at a time.")
