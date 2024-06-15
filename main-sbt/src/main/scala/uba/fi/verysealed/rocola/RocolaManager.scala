@@ -3,7 +3,7 @@ package uba.fi.verysealed.rocola
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, Behavior}
 import uba.fi.peerdy.actors.OfficeParty.PartySessionEvent
-import uba.fi.verysealed.rocola.behavior.PlayingBehavior
+import uba.fi.verysealed.rocola.behavior.{PlayingBehavior, SongMetadata}
 
 object RocolaManager {
 
@@ -20,30 +20,39 @@ object RocolaManager {
   final case class PlayMessagePosted(clientName: String, message: String) extends PlaySessionEvent
 
   sealed trait RocolaCommand extends PlaySessionCommand
-  final case class Play() extends RocolaCommand
-  final case class EnqueueSong(title:String, artist:String,replyTo: ActorRef[EnqueueSongResponse]) extends RocolaCommand
-  final case class DequeueSong(title:String, artist:String) extends RocolaCommand
-  case class EnqueueSongResponse(success: Boolean)
+  final case class EnqueueSong(title:String, artist:String, votes:Integer, replyTo: ActorRef[PlaylistResponse]) extends RocolaCommand
+  final case class DequeueSong(title:String, artist:String, replyTo: ActorRef[PlaylistResponse]) extends RocolaCommand
+  final case class DequeueSongByOrdinal(ordinal: Int, replyTo: ActorRef[PlaylistResponse])extends RocolaCommand
+  final case class VoteSong(votePositive: Boolean, title:String, artist:String, replyTo: ActorRef[PlaylistResponse])extends RocolaCommand
+  final case class VoteSongByOrdinal(votePositive: Boolean, ordinal: Int, replyTo: ActorRef[PlaylistResponse])extends RocolaCommand
 
-  final case class Pause() extends RocolaCommand
-  final case class Stop() extends RocolaCommand
-  final case class Skip() extends RocolaCommand
-  final case class VolumeUp() extends RocolaCommand
-  final case class VolumeDown() extends RocolaCommand
-  final case class Mute() extends RocolaCommand
-  final case class Unmute() extends RocolaCommand
-  final case class SetVolume(volume: Int) extends RocolaCommand
-  final case class SetPlaylist() extends RocolaCommand
+
+  final case class SetPlaylist(playlist: List[SongMetadata],replyTo:ActorRef[PlaylistResponse]) extends RocolaCommand
+  final case class AskPlaylist(replyTo:ActorRef[PlaylistResponse]) extends RocolaCommand
+  case class PlaylistResponse(success: Boolean, message:String, playlist: List[SongMetadata])
+
+  final case class SendPlay(replyTo: ActorRef[PlaybackResponse]) extends RocolaCommand
+  final case class SendPause(replyTo: ActorRef[PlaybackResponse]) extends RocolaCommand
+  final case class SendStop(replyTo: ActorRef[PlaybackResponse]) extends RocolaCommand
+  final case class SendSkipSong(replyTo: ActorRef[PlaybackResponse]) extends RocolaCommand
+  case class PlaybackResponse(success: Boolean, message: String)
+
+  final case class SendVolumeUp(replyTo: ActorRef[VolumeControlResponse]) extends RocolaCommand
+  final case class SendVolumeDown(replyTo: ActorRef[VolumeControlResponse]) extends RocolaCommand
+  final case class SendMute(replyTo: ActorRef[VolumeControlResponse]) extends RocolaCommand
+  final case class SendUnmute(replyTo: ActorRef[VolumeControlResponse]) extends RocolaCommand
+  final case class SetVolume(volume: Int,replyTo: ActorRef[VolumeControlResponse]) extends RocolaCommand
+  case class VolumeControlResponse(success: Boolean, message: String)
+
+
   final case class PostPlayMessage protected(message: String) extends RocolaCommand
   final case class NotifyDiYei protected(message: PlayMessagePosted) extends RocolaCommand
 
-  sealed trait SongEvent
-  final case class NewSongStarted()
-  final case class CurrentSongEnded()
-  final case class SongEnqueued()
+
 
   def apply(): Behavior[RocolaCommand] =
     Behaviors.setup(context => new PlayingBehavior(context))
+
 
 
 }

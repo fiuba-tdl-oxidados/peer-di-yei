@@ -5,7 +5,7 @@ import akka.http.scaladsl.Http
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.Route
 import uba.fi.verysealed.rocola.RocolaManager
-import uba.fi.verysealed.rocola.routes.EnqueueSongRouteHandler
+import uba.fi.verysealed.rocola.routes.PlaylistRouteHandler
 
 import scala.concurrent.ExecutionContextExecutor
 import scala.concurrent.duration.DurationInt
@@ -18,7 +18,7 @@ object DirectoryHttpServer  {
     implicit val system: ActorSystem[RocolaManager.RocolaCommand] = ActorSystem(RocolaManager(), "my-system")
     implicit val executionContext: ExecutionContextExecutor = system.executionContext
 
-    val enqueueRouteHandler = new EnqueueSongRouteHandler(system,system)(10.seconds)
+    val enqueueRouteHandler = new PlaylistRouteHandler(system,system)(10.seconds)
     //TODO: add additional routes here
     //val anotherRouteHandler = new AnotherRouteHandler()
 
