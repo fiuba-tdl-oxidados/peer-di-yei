@@ -4,7 +4,7 @@ import akka.Done
 import akka.actor.typed.ActorRef
 import akka.actor.typed.scaladsl.ActorContext
 import akka.stream.{KillSwitches, Materializer}
-import akka.stream.scaladsl.{Keep, Source}
+import akka.stream.scaladsl.{Keep, Source, SourceQueueWithComplete}
 import uba.fi.verysealed.rocola.RocolaManager.RocolaCommand
 import uba.fi.verysealed.rocola.behavior.SongMetadata
 
@@ -25,7 +25,7 @@ final case class SongEnqueued(song: SongMetadata) extends SongPlaybackEvent
 final case class PlaybackStatusChanged(message: String) extends SongPlaybackEvent
 final case class PlaylistStatusChanged(message: String) extends SongPlaybackEvent
 
-class SongPlayer(context: ActorContext[RocolaCommand], listener: ActorRef[SongPlaybackEvent]) {
+class SongPlayer(context: ActorContext[RocolaCommand], listener: ActorRef[SongPlaybackEvent], queue: SourceQueueWithComplete[PlaybackStatusChanged]) {
   implicit val ec: ExecutionContext = context.system.executionContext
   implicit val materializer: Materializer = Materializer(context.system)
 
@@ -40,6 +40,12 @@ class SongPlayer(context: ActorContext[RocolaCommand], listener: ActorRef[SongPl
   private val maxVolume = 100
   private val volume: AtomicInteger = new AtomicInteger(50) // Default volume is 50
   private val muted: AtomicBoolean = new AtomicBoolean(false)
+
+  private def publishStatus(message: String): Unit = {
+    val status = PlaybackStatusChanged(message)
+    queue.offer(status)
+    listener ! status
+  }
 
   def increaseVolume(step: Int): Unit = {
     val newVolume = Math.min(maxVolume, volume.addAndGet(step))
@@ -91,7 +97,7 @@ class SongPlayer(context: ActorContext[RocolaCommand], listener: ActorRef[SongPl
       .map { seconds =>
         elapsed.set(seconds)
         val message = s"Playing song ${song.title} by ${song.artist}, elapsed ${formatTime(seconds)}"
-        listener ! PlaybackStatusChanged(message)
+        publishStatus(message)
         message
       } // Format the message and send playback status
       .viaMat(KillSwitches.single)(Keep.right)
