@@ -7,7 +7,7 @@ import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.Route
 import akka.util.Timeout
 import spray.json.DefaultJsonProtocol._
-import spray.json.{RootJsonFormat, JsValue, DeserializationException}
+import spray.json.RootJsonFormat
 import uba.fi.verysealed.rocola.RocolaManager
 import uba.fi.verysealed.rocola.behavior.SongMetadata
 
@@ -89,6 +89,6 @@ class PlaylistRouteHandler(rocolaManager: ActorRef[RocolaManager.RocolaCommand],
           }
         }
       }
-  }
+}
 
 

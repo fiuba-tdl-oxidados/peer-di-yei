@@ -33,6 +33,12 @@ object SongMetadata {
   implicit val format: RootJsonFormat[SongMetadata] = jsonFormat5(SongMetadata.apply)
 }
 
+object PlayingBehavior {
+  def apply(): Behavior[RocolaCommand] = Behaviors.setup { context =>
+
+    new PlayingBehavior(context)
+  }
+}
 class PlayingBehavior(context: ActorContext[RocolaCommand]
                      ) extends AbstractBehavior[RocolaCommand](context) {
 
@@ -44,7 +50,7 @@ class PlayingBehavior(context: ActorContext[RocolaCommand]
   // Create the classic ActorSystem from the typed ActorSystem
   // Create the Listener actor
   val listener: ActorRef[SongPlaybackEvent] = context.spawn(Listener(), "listener")
-  val songsPlayer = new SongPlayer(context, listener)
+  val songsPlayer = new SongPlayer(context, listener, PlaybackStatusStream.getQueue)
 
   // Method to search for a song by title and artist
   def searchSong(title: String, artist: String): Option[SongMetadata] = {
