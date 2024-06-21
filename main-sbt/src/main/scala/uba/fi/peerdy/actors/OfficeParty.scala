@@ -3,6 +3,8 @@ package uba.fi.peerdy.actors
 
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, Behavior}
+import scala.util.{Try}
+import spray.json._
 import uba.fi.peerdy.actors.DiYei.DiYeiCommand
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
@@ -26,13 +28,21 @@ object OfficeParty {
 
   final case class NewDiYeiAccepted(handle: ActorRef[DiYeiCommand]) extends PartySessionEvent
 
-  final case class NewDiYeiDenied(reason: String) extends PartySessionEvent
+  final case class NewDiYeiDenied(repyTo: ActorRef[PartyCommand], reason: String) extends PartySessionEvent
 
   final case class NewListenerAccepted(handle: ActorRef[PartySessionCommand]) extends PartySessionEvent
 
   final case class NewListenerDenied(reason: String) extends PartySessionEvent
 
   final case class MessagePosted(peerName: String, message: String) extends PartySessionEvent
+
+  final case class WrappedHttpResponse(repyTo: ActorRef[PartyCommand], response: Try[String]) extends PartySessionEvent
+  
+  case class Member(id: String, name: String, role: String)
+
+  trait JsonSupport extends DefaultJsonProtocol {
+    implicit val memberFormat: RootJsonFormat[Member] = jsonFormat3(Member)
+  }
 
   sealed trait PartySessionCommand
 
@@ -68,7 +78,7 @@ object OfficeParty {
           // TODO: here we should check against directory whether this client could act as Diyei if nobody has already started a session
           currentDiYei match {
             case Some(_) =>
-              client ! NewDiYeiDenied("Another session is already in progress. Only one session is allowed at a time.")
+              client ! NewDiYeiDenied(context.self, "Another session is already in progress. Only one session is allowed at a time.")
               Behaviors.same
             case None =>
               val diYei = context.spawn(DiYei(), "diyei")

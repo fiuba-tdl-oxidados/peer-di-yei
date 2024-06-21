@@ -3,6 +3,12 @@ package uba.fi.peerdy
 import akka.NotUsed
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, ActorSystem, Behavior, Terminated}
+import akka.http.scaladsl.Http
+import akka.http.scaladsl.model.{HttpMethods, HttpRequest, Uri}
+import akka.http.scaladsl.unmarshalling.Unmarshal
+import spray.json._
+import scala.concurrent.ExecutionContextExecutor
+import scala.util.{Failure, Success, Try}
 import uba.fi.peerdy.actors.DiYei.DiYeiCommand
 import uba.fi.peerdy.actors.OfficeParty._
 import uba.fi.peerdy.actors.{DiYei, OfficeParty}
@@ -15,7 +21,7 @@ import uba.fi.peerdy.actors.{DiYei, OfficeParty}
   * The user can propose a song, upvote a song, or downvote a song.
   * The user can also exit the system by typing "exit".
  */
-object OfficePartyHall {
+object OfficePartyHall extends JsonSupport {
 
   // The DiYei actor reference wrapped in an Option to handle the case when the DiYei is not available
   private var diyeiProxy:  Option[ActorRef[DiYeiCommand]] = Option.empty
@@ -45,6 +51,12 @@ object OfficePartyHall {
 
   private def SessionHandler(): Behavior[PartySessionEvent] = {
     Behaviors.receive { (context, message) =>
+      implicit val system: ActorSystem[Nothing] = context.system
+      implicit val executionContext: ExecutionContextExecutor = context.executionContext
+      implicit val directory:String = "localhost"
+      implicit val port:String = "4545"
+      val http = Http(system)
+
       message match {
         case NewDiYeiAccepted(handle) =>
           context.log.info("DiYei accepted")
@@ -59,9 +71,18 @@ object OfficePartyHall {
             translateDiYeiCommand(input)
           }
           Behaviors.same
-        case NewDiYeiDenied(reason) =>
-          context.log.info(s"DiYei denied: $reason")
-          Behaviors.stopped
+        case NewDiYeiDenied(replyTo, reason) =>
+          val uri = Uri(s"http://$directory:$port/list-members")
+          val request = HttpRequest(method = HttpMethods.GET, uri = uri)
+
+          // Send HTTP request and pipe response to self
+          context.pipeToSelf(http.singleRequest(request).flatMap { response =>
+            Unmarshal(response.entity).to[String]
+          }) {
+            case Success(value) => WrappedHttpResponse(replyTo, Success(value))
+            case Failure(exception) => WrappedHttpResponse(replyTo, Failure(exception))
+          }
+          Behaviors.same
         case NewListenerAccepted(handle) =>
           //TODO: implement here the Listener behavior
           context.log.info("Listener accepted")
@@ -69,6 +90,28 @@ object OfficePartyHall {
         case NewListenerDenied(reason) =>
           context.log.info(s"Listener denied: $reason")
           Behaviors.stopped
+        case WrappedHttpResponse(replyTo, Success(value)) =>
+            context.log.info(s"HTTP response received: $value")
+
+            // Parse the JSON response to extract users
+            val members = value.parseJson.convertTo[List[Member]]
+
+            // Find the DiYei from the users list
+            val diYei = members.find(_.role == "DiYei")
+
+            diYei match {
+              case Some(diYei) =>
+                context.log.info(s"DiYei found: ${diYei.name}")
+                // Launch the StartListening event
+                replyTo ! StartListening("TODO:NAME", context.self.asInstanceOf[ActorRef[PartySessionEvent]])
+              case None =>
+                context.log.warn("No DiYei found in the user list")
+            }
+
+            Behaviors.same
+          case WrappedHttpResponse(replyTo, Failure(exception)) =>
+            context.log.error(s"Failed to fetch users: ${exception.getMessage}")
+            Behaviors.same
         case _ =>
           Behaviors.same
       }
