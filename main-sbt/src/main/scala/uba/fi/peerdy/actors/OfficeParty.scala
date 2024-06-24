@@ -24,7 +24,7 @@ object OfficeParty {
 
   sealed trait PartySessionEvent
 
-  final case class NewDiYeiAccepted(handle: ActorRef[DiYeiCommand]) extends PartySessionEvent
+  final case class NewDiYeiAccepted(handle: ActorRef[Listener.ListenerCommand]) extends PartySessionEvent
 
   final case class NewDiYeiDenied(reason: String) extends PartySessionEvent
 
@@ -71,9 +71,9 @@ object OfficeParty {
               client ! NewDiYeiDenied("Another session is already in progress. Only one session is allowed at a time.")
               Behaviors.same
             case None =>
-              val diYei = context.spawn(DiYei(), "diyei")
+              val diYei = context.spawn(Listener(), "listener")
               client ! NewDiYeiAccepted(diYei)
-              officeParty(Some(diYei), sessions)
+              Behaviors.same
           }
         case StartListening(peerName, client) =>
           currentDiYei match {

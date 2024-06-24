@@ -12,12 +12,13 @@ import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
 import scala.util.{Failure, Success, Try}
 import java.net.URLEncoder
+import scala.collection.mutable
 object DiYei {
 
   sealed trait DiYeiCommand
   final case class ProposeSong(sender: String,song: String, artist:String) extends DiYeiCommand
-  final case class UpVoteSong() extends DiYeiCommand
-  final case class DownVoteSong() extends DiYeiCommand
+  final case class UpVoteSong(song: String) extends DiYeiCommand
+  final case class DownVoteSong(song: String) extends DiYeiCommand
 
   sealed trait DiYeiEvents
   final case class NewSongAccepted() extends DiYeiEvents
@@ -56,21 +57,24 @@ object DiYei {
               context.log.info("No Rocola available")
               Behaviors.same
           }
-        case UpVoteSong() =>
+        case UpVoteSong(song: String) =>
           rocola match {
             case Some(_) =>
               context.log.info("Upvoting song")
               //TODO: implement UpVoteSong
+
+              rocola.get ! Rocola.NotifyDiYei(Rocola.PlayMessagePosted("DiYei", "Upvoting song"))
               Behaviors.same
             case None =>
               context.log.info("No Rocola available")
               Behaviors.same
           }
-        case DownVoteSong() =>
+        case DownVoteSong(song: String) =>
           rocola match {
             case Some(_) =>
               context.log.info("Downvoting song")
               //TODO: implement DownVoteSong
+              rocola.get ! Rocola.NotifyDiYei(Rocola.PlayMessagePosted("DiYei", "Downvoting song"))
               Behaviors.same
             case None =>
               context.log.info("No Rocola available")
