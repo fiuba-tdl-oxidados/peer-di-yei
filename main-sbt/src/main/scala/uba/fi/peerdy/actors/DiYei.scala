@@ -15,92 +15,50 @@ import java.net.URLEncoder
 object DiYei {
 
   sealed trait DiYeiCommand
-  final case class ProposeSong(sender: String,song: String, artist:String) extends DiYeiCommand
-  final case class UpVoteSong(song: String) extends DiYeiCommand
-  final case class DownVoteSong(song: String) extends DiYeiCommand
+  final case class ShowCommands() extends DiYeiCommand
+  final case class ProcessCommand(cmd: String) extends DiYeiCommand
 
-  sealed trait DiYeiEvents
-  final case class NewSongAccepted() extends DiYeiEvents
-  final case class NewSongRejected() extends DiYeiEvents
-  final case class NewVoteAccepted() extends DiYeiEvents
-  final case class PlaylistUpdated() extends DiYeiEvents
-  final case class CurrentSongUpdated() extends DiYeiEvents
-
-  private var rocola: Option[ActorRef[Rocola.PlaySessionCommand]]= Option.empty
+  private var rocola: Option[ActorRef[Rocola.RocolaCommand]] = Option.empty
 
   def apply(): Behavior[DiYeiCommand] = {
-
     Behaviors.setup { context =>
+      // var peerProtocol: ActorRef[PeerProtocol.Command] = context.spawn(PeerProtocol(), "peerProtocol")
+      // peerProtocol ! PeerProtocol.StartServer("localhost", 8081)
 
       rocola match {
+        case Some(_) =>
+          context.log.info("Rocola found")
         case None =>
           context.log.info("No Rocola available, creating...")
-          rocola = Option {
-            context.spawn(Rocola(), "diyeiRocola")
-          }
-          val handler = context.spawn(RocolaHandler(), "diyeiRocolaHandler")
-          rocola.get ! Rocola.StartPlaySession("DiYei", handler)
-
+          rocola = Option { context.spawn(Rocola(), "diyeiRocola") }
       }
-      // TODO: refactor this inside the Rocola object, to interact with the Directory Server
       Behaviors.receiveMessage {
-
-        case ProposeSong(sender: String, song: String, artist:String) =>
-          //TODO: refactor to avoid duplicates when checking for rocola availability
-          rocola match {
-            case Some(_) =>
-              rocola.get ! Rocola.EnqueueSong(song,artist)
-              Behaviors.same
-            case None =>
-              //TODO: change behavior if no rocola is available?
-              context.log.info("No Rocola available")
-              Behaviors.same
+        case ShowCommands() =>
+          println("Available commands:")
+          println("play - Play playlist")
+          println("pause - Pause playlist")
+          println("commands - List available commands")
+          println("exit - Exit the system")
+          Behaviors.same
+        case ProcessCommand(cmd) =>
+          cmd match {
+            case "commands" =>
+              context.self ! ShowCommands()
+            case "play" =>
+              rocola.get ! Rocola.Play()
+            case "pause" =>
+              rocola.get ! Rocola.Pause()
+            case "propose" =>
+              println("Enter song name: ")
+              val song = scala.io.StdIn.readLine()
+              println("Enter artist name: ")
+              val artist = scala.io.StdIn.readLine()
+              rocola.get ! Rocola.EnqueueSong(song, artist)
+            case _ =>
+              context.log.info("Invalid command")
           }
-        case UpVoteSong(song: String) =>
-          rocola match {
-            case Some(_) =>
-              context.log.info("Upvoting song")
-              //TODO: implement UpVoteSong
-              Behaviors.same
-            case None =>
-              context.log.info("No Rocola available")
-              Behaviors.same
-          }
-        case DownVoteSong(song: String) =>
-          rocola match {
-            case Some(_) =>
-              context.log.info("Downvoting song")
-              //TODO: implement DownVoteSong
-              Behaviors.same
-            case None =>
-              context.log.info("No Rocola available")
-              Behaviors.same
-          }
-      }
-  }
-    }
-
-  private object RocolaHandler
-  {
-    def apply(): Behavior[Rocola.PlaySessionEvent] = {
-      Behaviors.receive { (context, message) =>
-        message match {
-          case Rocola.PlaySessionStarted(handle) =>
-            context.log.info("Play session started")
-            Behaviors.same
-          case Rocola.PlaySessionEnded() =>
-            context.log.info("Play session ended")
-            Behaviors.same
-          case Rocola.PlaySessionDenied(reason) =>
-            context.log.info(s"Play session denied: $reason")
-            Behaviors.same
-          case Rocola.PlayMessagePosted(clientName, message) =>
-            context.log.info(s"Message posted by $clientName: $message")
-            Behaviors.same
-        }
+          Behaviors.same
       }
     }
   }
-
-
 }
