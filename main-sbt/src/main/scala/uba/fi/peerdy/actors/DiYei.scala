@@ -12,11 +12,13 @@ import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
 import scala.util.{Failure, Success, Try}
 import java.net.URLEncoder
+import scala.collection.mutable
 object DiYei {
 
   sealed trait DiYeiCommand
   final case class ShowCommands() extends DiYeiCommand
   final case class ProcessCommand(cmd: String) extends DiYeiCommand
+
 
   private var rocola: Option[ActorRef[Rocola.RocolaCommand]] = Option.empty
 

@@ -26,6 +26,7 @@ object OfficePartyHall {
       val officeParty = context.spawn(OfficeParty(), "officeParty")
       val handlerRef = context.spawn(SessionHandler(), "handler")
       officeParty ! JoinParty(handlerRef)
+
       Behaviors.empty
 
       Behaviors.receiveSignal {
@@ -66,6 +67,7 @@ object OfficePartyHall {
           }
           Behaviors.same
         case JoinDenied(reason) =>
+
           context.log.info(s"Listener denied: $reason")
           Behaviors.stopped
         case _ =>
