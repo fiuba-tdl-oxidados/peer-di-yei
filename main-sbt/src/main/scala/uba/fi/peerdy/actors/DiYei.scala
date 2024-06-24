@@ -12,6 +12,7 @@ import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
 import scala.util.{Failure, Success, Try}
 import java.net.URLEncoder
+import scala.collection.mutable
 object DiYei {
 
   sealed trait DiYeiCommand
@@ -61,6 +62,8 @@ object DiYei {
             case Some(_) =>
               context.log.info("Upvoting song")
               //TODO: implement UpVoteSong
+
+              rocola.get ! Rocola.NotifyDiYei(Rocola.PlayMessagePosted("DiYei", "Upvoting song"))
               Behaviors.same
             case None =>
               context.log.info("No Rocola available")
@@ -71,6 +74,7 @@ object DiYei {
             case Some(_) =>
               context.log.info("Downvoting song")
               //TODO: implement DownVoteSong
+              rocola.get ! Rocola.NotifyDiYei(Rocola.PlayMessagePosted("DiYei", "Downvoting song"))
               Behaviors.same
             case None =>
               context.log.info("No Rocola available")

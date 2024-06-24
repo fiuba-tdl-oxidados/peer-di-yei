@@ -49,7 +49,6 @@ object PlaybackRouteHandler {
               complete(PlaybackResponseMessage(s"Failed to start playing", success = false))
             }
           }
-
         }
       } ~
       path("pause") {
@@ -61,7 +60,6 @@ object PlaybackRouteHandler {
             } else {
               complete(PlaybackResponseMessage(s"Failed to pause playing", success = false))
             }
-
           }
         }
       } ~
@@ -75,79 +73,79 @@ object PlaybackRouteHandler {
               complete(PlaybackResponseMessage(s"Failed to stop playing", success = false))
             }
           }
-        } ~
-          path("skip") {
-            get {
-              val responseFuture: Future[PlaybackResponse] = rocolaManager.ask(ref => SendSkipSong(ref))(timeout, system.scheduler)
-              onSuccess(responseFuture) { response =>
-                if (response.success) {
-                  complete(PlaybackResponseMessage(s"Song skipped", success = true))
-                } else {
-                  complete(PlaybackResponseMessage(s"Failed to skip song", success = false))
-                }
-              }
-            }
-          } ~
-          path("volume-up") {
-            get {
-              val responseFuture: Future[VolumeControlResponse] = rocolaManager.ask(ref => SendVolumeUp(ref))(timeout, system.scheduler)
-              onSuccess(responseFuture) { response =>
-                if (response.success) {
-                  complete(PlaybackResponseMessage(s"volume increased", success = true))
-                } else {
-                  complete(PlaybackResponseMessage(s"Failed to increase volume", success = false))
-                }
-              }
-            }
-          } ~
-          path("volume-down") {
-            get {
-              val responseFuture: Future[VolumeControlResponse] = rocolaManager.ask(ref => SendVolumeDown(ref))(timeout, system.scheduler)
-              onSuccess(responseFuture) { response =>
-                if (response.success) {
-                  complete(PlaybackResponseMessage(s"Volume decreased", success = true))
-                } else {
-                  complete(PlaybackResponseMessage(s"Failed to decrease volume", success = false))
-                }
-              }
-            }
-          } ~
-          path("mute") {
-            get {
-              val responseFuture: Future[VolumeControlResponse] = rocolaManager.ask(ref => SendMute(ref))(timeout, system.scheduler)
-              onSuccess(responseFuture) { response =>
-                if (response.success) {
-                  complete(PlaybackResponseMessage(s"Volume muted", success = true))
-                } else {
-                  complete(PlaybackResponseMessage(s"Failed to mute volume", success = false))
-                }
-              }
-            }
-          } ~
-          path("unmute") {
-            get {
-              val responseFuture: Future[VolumeControlResponse] = rocolaManager.ask(ref => SendUnmute(ref))(timeout, system.scheduler)
-              onSuccess(responseFuture) { response =>
-                if (response.success) {
-                  complete(PlaybackResponseMessage(s"Volume unmuted", success = true))
-                } else {
-                  complete(PlaybackResponseMessage(s"Failed to unmute volume", success = false))
-                }
-              }
-            }
-          } ~
-          path("set-volume" / IntNumber) { volume =>
-            get {
-              val responseFuture: Future[VolumeControlResponse] = rocolaManager.ask(ref => SetVolume(volume, ref))(timeout, system.scheduler)
-              onSuccess(responseFuture) { response =>
-                if (response.success) {
-                  complete(PlaybackResponseMessage(s"Volume set", success = true))
-                } else {
-                  complete(PlaybackResponseMessage(s"Failed to set volume", success = false))
-                }
-              }
+        }
+      } ~
+      path("skip") {
+        get {
+          val responseFuture: Future[PlaybackResponse] = rocolaManager.ask(ref => SendSkipSong(ref))(timeout, system.scheduler)
+          onSuccess(responseFuture) { response =>
+            if (response.success) {
+              complete(PlaybackResponseMessage(s"Song skipped", success = true))
+            } else {
+              complete(PlaybackResponseMessage(s"Failed to skip song", success = false))
             }
           }
+        }
+      } ~
+      path("volume-up") {
+        get {
+          val responseFuture: Future[VolumeControlResponse] = rocolaManager.ask(ref => SendVolumeUp(ref))(timeout, system.scheduler)
+          onSuccess(responseFuture) { response =>
+            if (response.success) {
+              complete(PlaybackResponseMessage(s"Volume increased", success = true))
+            } else {
+              complete(PlaybackResponseMessage(s"Failed to increase volume", success = false))
+            }
+          }
+        }
+      } ~
+      path("volume-down") {
+        get {
+          val responseFuture: Future[VolumeControlResponse] = rocolaManager.ask(ref => SendVolumeDown(ref))(timeout, system.scheduler)
+          onSuccess(responseFuture) { response =>
+            if (response.success) {
+              complete(PlaybackResponseMessage(s"Volume decreased", success = true))
+            } else {
+              complete(PlaybackResponseMessage(s"Failed to decrease volume", success = false))
+            }
+          }
+        }
+      } ~
+      path("mute") {
+        get {
+          val responseFuture: Future[VolumeControlResponse] = rocolaManager.ask(ref => SendMute(ref))(timeout, system.scheduler)
+          onSuccess(responseFuture) { response =>
+            if (response.success) {
+              complete(PlaybackResponseMessage(s"Volume muted", success = true))
+            } else {
+              complete(PlaybackResponseMessage(s"Failed to mute volume", success = false))
+            }
+          }
+        }
+      } ~
+      path("unmute") {
+        get {
+          val responseFuture: Future[VolumeControlResponse] = rocolaManager.ask(ref => SendUnmute(ref))(timeout, system.scheduler)
+          onSuccess(responseFuture) { response =>
+            if (response.success) {
+              complete(PlaybackResponseMessage(s"Volume unmuted", success = true))
+            } else {
+              complete(PlaybackResponseMessage(s"Failed to unmute volume", success = false))
+            }
+          }
+        }
+      } ~
+      path("set-volume" / IntNumber) { volume =>
+        get {
+          val responseFuture: Future[VolumeControlResponse] = rocolaManager.ask(ref => SetVolume(volume, ref))(timeout, system.scheduler)
+          onSuccess(responseFuture) { response =>
+            if (response.success) {
+              complete(PlaybackResponseMessage(s"Volume set", success = true))
+            } else {
+              complete(PlaybackResponseMessage(s"Failed to set volume", success = false))
+            }
+          }
+        }
       }
   }
 }

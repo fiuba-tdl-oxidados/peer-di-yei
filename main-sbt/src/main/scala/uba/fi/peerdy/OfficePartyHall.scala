@@ -5,7 +5,8 @@ import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, ActorSystem, Behavior, Terminated}
 import uba.fi.peerdy.actors.DiYei.DiYeiCommand
 import uba.fi.peerdy.actors.OfficeParty._
-import uba.fi.peerdy.actors.{DiYei, OfficeParty}
+import uba.fi.peerdy.actors.{DiYei, Listener, OfficeParty}
+import uba.fi.peerdy.actors.Listener.ListenerCommand
 
 /*
   * OfficePartyHall is the main actor of the system.
@@ -19,6 +20,8 @@ object OfficePartyHall {
 
   // The DiYei actor reference wrapped in an Option to handle the case when the DiYei is not available
   private var diyeiProxy:  Option[ActorRef[DiYeiCommand]] = Option.empty
+  private var listenerProxy: Option[ActorRef[ListenerCommand]] = Option.empty
+
 
   /* The apply method creates the OfficePartyHall actor
    * The OfficeParty actor is created and a message is sent to it to start playing
@@ -29,6 +32,7 @@ object OfficePartyHall {
 
       val officeParty = context.spawn(OfficeParty(), "officeParty")
       val handlerRef = context.spawn(SessionHandler(), "handler")
+
       //TODO: understand how to mix behaviors in the same actor
       officeParty ! StartPlaying(handlerRef)
       Behaviors.empty
@@ -48,23 +52,25 @@ object OfficePartyHall {
       message match {
         case NewDiYeiAccepted(handle) =>
           context.log.info("DiYei accepted")
-          diyeiProxy = Option(handle)
-          commandList()
+
+          handle ! Listener.ProposeSong( "song", "artist")
+          Behaviors.same
+        case NewDiYeiDenied(reason) =>
+          context.log.info(s"DiYei denied: $reason")
+          Behaviors.stopped
+        case NewListenerAccepted(handle) =>
+          context.log.info("Listener accepted")
+
+
+
           while (true) {
             val input = scala.io.StdIn.readLine()
             if (input == "exit") {
               context.log.info("Exiting")
               return Behaviors.stopped
             }
-            translateDiYeiCommand(input)
+            translateListenerCommand(input)
           }
-          Behaviors.same
-        case NewDiYeiDenied(reason) =>
-          context.log.info(s"DiYei denied: $reason")
-          Behaviors.stopped
-        case NewListenerAccepted(handle) =>
-          //TODO: implement here the Listener behavior
-          context.log.info("Listener accepted")
           Behaviors.same
         case NewListenerDenied(reason) =>
           context.log.info(s"Listener denied: $reason")
@@ -96,6 +102,32 @@ object OfficePartyHall {
         println("Enter song name: ")
         val song: String = scala.io.StdIn.readLine()
         diyeiProxy.get ! DiYei.DownVoteSong(song)
+        println("Downvoting song")
+      case _ =>
+        println("Invalid command")
+    }
+  }
+
+  private def translateListenerCommand(str: String): Unit = {
+    str match {
+      case "commands" =>
+        commandList()
+      case "propose" =>
+        println("Enter song name:")
+        val song = scala.io.StdIn.readLine()
+        println("Enter artist name:")
+        val artist = scala.io.StdIn.readLine()
+        println(s"Proposing song: $song from artist: $artist")
+        listenerProxy.get ! Listener.ProposeSong(song, artist)
+      case "upvote" =>
+        println("Enter song name: ")
+        val song: String = scala.io.StdIn.readLine()
+        listenerProxy.get ! Listener.VoteSong(song, vote = true)
+        println("Upvoting song")
+      case "downvote" =>
+        println("Enter song name: ")
+        val song: String = scala.io.StdIn.readLine()
+        listenerProxy.get ! Listener.VoteSong(song, vote = false)
         println("Downvoting song")
       case _ =>
         println("Invalid command")
