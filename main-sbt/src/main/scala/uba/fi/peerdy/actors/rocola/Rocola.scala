@@ -26,21 +26,7 @@ trait JsonSupport extends DefaultJsonProtocol {
   implicit val playlistResponseFormat: RootJsonFormat[PlaylistResponseMessage] = jsonFormat3(PlaylistResponseMessage.apply)
 }
 object Rocola extends JsonSupport {
-
-  sealed trait PlaySessionCommand
-  final case class StartPlaySession(clientName: String, replyTo: ActorRef[PlaySessionEvent]) extends PlaySessionCommand
-  final case class EndPlaySession() extends PlaySessionCommand
-
-  final case class PublishPlaySessionMessage protected(screenName: String, message: String) extends PlaySessionCommand
-
-  sealed trait PlaySessionEvent
-  final case class PlaySessionStarted(handle: ActorRef[PostPlayMessage]) extends PlaySessionEvent
-  final case class PlaySessionEnded() extends PlaySessionEvent
-  final case class PlaySessionDenied(reason:String) extends PlaySessionEvent
-  final case class PlayMessagePosted(clientName: String, message: String) extends PlaySessionEvent
-
-  sealed trait RocolaCommand extends PlaySessionCommand
->>>>>>> dj-module
+  sealed trait RocolaCommand
   final case class EnqueueSong(song:String, artist:String) extends RocolaCommand
   final case class Play() extends RocolaCommand
   final case class Pause() extends RocolaCommand
@@ -57,10 +43,7 @@ object Rocola extends JsonSupport {
   final case class NewSongStarted()
   final case class CurrentSongEnded()
 
-
-
-
-  def apply(): Behavior[PlaySessionCommand] = {
+  def apply(): Behavior[RocolaCommand] = {
     Behaviors.setup { context =>
       implicit val system: ActorSystem[Nothing] = context.system
       implicit val executionContext: ExecutionContextExecutor = context.executionContext
@@ -68,15 +51,7 @@ object Rocola extends JsonSupport {
       val directory = "localhost"
       val port = "4545"
 
-
-
-      // TODO: refactor this inside the Rocola object, to interact with the Directory Server
       Behaviors.receiveMessage {
-        case StartPlaySession(clientName, replyTo) =>
-          //TODO: confirm here whether we can use the Rocola or not
-         //context.log.info(s"Starting play session for $clientName")
-         //replyTo ! PlaySessionStarted(context.self)
-         Behaviors.same
         case EnqueueSong(song:String, artist:String) =>
           context.log.info(s"Enqui.. song: $song")
           val uri = Uri(s"http://$directory:$port/enqueue?title=$song&artist=$artist&votes=1")
@@ -360,25 +335,6 @@ object Rocola extends JsonSupport {
               system.terminate()
           }
           Behaviors.same
-        case PostPlayMessage(message) =>
-          context.log.info(s"Message posted: $message")
-
-
-          Behaviors.same
-        case NotifyDiYei(message) =>
-          context.log.info(s"Message notified: $message")
-          Behaviors.same
-
-        case WrappedHttpResponse(response) =>
-        response match {
-          case Success(res) =>
-            //TODO: handle json response to inform the diyei and then inform others
-            context.log.info(s"Received response: $res")
-
-          case Failure(exception) =>
-            context.log.error(s"Failed to send request: ${exception.getMessage}")
-        }
-        Behaviors.same
       }
     }
   }
