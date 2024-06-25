@@ -5,15 +5,12 @@ import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.Route
 import akka.actor.typed.scaladsl.AskPattern._
 import akka.util.Timeout
-import spray.json.DefaultJsonProtocol.jsonFormat3
 import spray.json.{DefaultJsonProtocol, DeserializationException, JsString, JsValue, JsonFormat, RootJsonFormat}
 import uba.fi.verysealed.rocola.SessionManager
 import uba.fi.verysealed.rocola.SessionManager._
-import uba.fi.verysealed.rocola.behavior.SongMetadata
-
-import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 import scala.concurrent.Future
 import scala.concurrent.duration._
+import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
 
 object RegisterRouteHandler extends DefaultJsonProtocol {
   // Custom JSON format for MemberType
@@ -29,22 +26,17 @@ object RegisterRouteHandler extends DefaultJsonProtocol {
     }
   }
 
-
   implicit val memberFormat: RootJsonFormat[Member] = jsonFormat4(Member)
   implicit val membersListResponseFormat: RootJsonFormat[MembersListResponse] = jsonFormat1(MembersListResponse)
   implicit val revocationResponseFormat: RootJsonFormat[RevocationResponse] = jsonFormat2(RevocationResponse)
+  implicit val registrationResponseFormat: RootJsonFormat[RegistrationResponse] = jsonFormat3(RegistrationResponse)
 
   // Define the JSON response case class
   case class RegistrationResponseMessage(message: String, success: Boolean, token: String)
-
-  // Define the JSON format for the response
-  object RegistrationResponseMessage {
-    implicit val format: RootJsonFormat[RegistrationResponseMessage] = jsonFormat3(RegistrationResponseMessage.apply)
-  }
+  implicit val registrationResponseMessageFormat: RootJsonFormat[RegistrationResponseMessage] = jsonFormat3(RegistrationResponseMessage)
 
   case class RegisterRequest(name: String, ip: String, port: Int)
   implicit val registerRequestFormat: RootJsonFormat[RegisterRequest] = jsonFormat3(RegisterRequest)
-
 
   def apply(sessionManager: ActorRef[SessionManager.Command])(implicit system: ActorSystem[_]): Route = {
     implicit val timeout: Timeout = 5.seconds
@@ -54,13 +46,11 @@ object RegisterRouteHandler extends DefaultJsonProtocol {
         entity(as[RegisterRequest]) { request =>
           val responseFuture: Future[RegistrationResponse] = sessionManager.ask(ref => RegisterDiYei(request.name, request.ip, request.port, ref))
           onSuccess(responseFuture) { response =>
-            if (response.success){
-              complete(RegistrationResponseMessage(response.message, response.success,response.token.get ))
+            if (response.success) {
+              complete(RegistrationResponseMessage(response.message, response.success, response.token.getOrElse("")))
+            } else {
+              complete(RegistrationResponseMessage(response.message, response.success, ""))
             }
-            else
-              {
-                complete(RegistrationResponseMessage(response.message, response.success,"" ))
-              }
           }
         }
       }
@@ -70,12 +60,40 @@ object RegisterRouteHandler extends DefaultJsonProtocol {
           entity(as[RegisterRequest]) { request =>
             val responseFuture: Future[RegistrationResponse] = sessionManager.ask(ref => RegisterListener(request.name, request.ip, request.port, ref))
             onSuccess(responseFuture) { response =>
-              if (response.success){
-                complete(RegistrationResponseMessage(response.message, response.success,"" ))
-              }
-              else
-              {
-                complete(RegistrationResponseMessage(response.message, response.success,"" ))
+              complete(RegistrationResponseMessage(response.message, response.success, ""))
+            }
+          }
+        }
+      } ~
+      path("unregister-diyei") {
+        post {
+          parameters("token") { token =>
+            val responseFuture: Future[RevocationResponse] = sessionManager.ask(ref => RevokeDiYei(token, ref))
+            onSuccess(responseFuture) { response =>
+              complete(response)
+            }
+          }
+        }
+      } ~
+      path("unregister-listener") {
+        post {
+          parameters("name") { name =>
+            val responseFuture: Future[RevocationResponse] = sessionManager.ask(ref => RevokeListener(name, ref))
+            onSuccess(responseFuture) { response =>
+              complete(response)
+            }
+          }
+        }
+      } ~
+      path("promote-diyei") {
+        post {
+          parameters("token", "name") { (token, name) =>
+            val responseFuture: Future[RegistrationResponse] = sessionManager.ask(ref => PromoteDiYei(token, name, ref))
+            onSuccess(responseFuture) { response =>
+              if (response.success) {
+                complete(RegistrationResponseMessage(response.message, response.success, response.token.getOrElse("")))
+              } else {
+                complete(RegistrationResponseMessage(response.message, response.success, ""))
               }
             }
           }

@@ -20,15 +20,16 @@ object DirectoryHttpServer  {
     implicit val system: ActorSystem[RocolaManager.RocolaCommand] = ActorSystem(RocolaManager(), "my-system")
     implicit val executionContext: ExecutionContextExecutor = system.executionContext
 
-    val enqueueRouteHandler = new PlaylistRouteHandler(system,system)(10.seconds)
     // Get the status source for routes
     PlaybackStatusStream.initialize()(system)
     val statusSource = PlaybackStatusStream.getSource
 
-    // Set up routes
-    val  playbackRouteHandler= PlaybackRouteHandler(statusSource,system)
-    // Set up SessionManager actor
     val sessionManager: ActorRef[SessionManager.Command] = system.systemActorOf(SessionManager(), "sessionManager")
+
+    // Set up routes
+    val enqueueRouteHandler = new PlaylistRouteHandler(system,sessionManager,system)(10.seconds,executionContext)
+    val  playbackRouteHandler= PlaybackRouteHandler(statusSource,system,sessionManager)
+    // Set up SessionManager actor
     val registerRoutes = RegisterRouteHandler(sessionManager)
     val route: Route = concat(
       enqueueRouteHandler.route,
