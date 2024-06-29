@@ -4,6 +4,7 @@ import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.Behaviors
 import uba.fi.peerdy.actors.rocola.Rocola
 import uba.fi.peerdy.actors.Member
+import uba.fi.peerdy.actors.protocol.PeerProtocol
 
 object Listener {
   sealed trait ListenerCommand
@@ -11,19 +12,22 @@ object Listener {
   final case class ProcessCommand(cmd: String) extends ListenerCommand
 
   private var rocola: Option[ActorRef[Rocola.RocolaCommand]] = Option.empty
+  private var peerProtocol: Option[ActorRef[PeerProtocol.Command]] = Option.empty
 
 
-  def apply(diyei: Member): Behavior[ListenerCommand] = {
+  def apply(address: String, port: Int, diyei: Member): Behavior[ListenerCommand] = {
     Behaviors.setup { context =>
-      // var peerProtocol: ActorRef[PeerProtocol.Command] = context.spawn(PeerProtocol(), "peerProtocol")
-      // peerProtocol ! PeerProtocol.AddConnection(diyei.ip, diyei.port)
-      // peerProtocol ! PeerProtocol.SendMessageToAll("NewListener")
+      peerProtocol match {
+        case Some(_) =>
+        case None =>
+          peerProtocol = Option { context.spawn(PeerProtocol(), "PeerProtocol") }
+          peerProtocol.get ! PeerProtocol.Bind(address, port)
+          peerProtocol.get ! PeerProtocol.Connect(diyei.ip, diyei.port)
+      }
 
       rocola match {
         case Some(_) =>
-          context.log.info("Rocola found")
         case None =>
-          context.log.info("No Rocola available, creating...")
           rocola = Option { context.spawn(Rocola(), "listenersRocola") }
       }
       Behaviors.receiveMessage {
@@ -37,6 +41,10 @@ object Listener {
               context.self ! ShowCommands()
             case "play" =>
               rocola.get ! Rocola.Play()
+            case "do" =>
+              peerProtocol.get ! PeerProtocol.SendMessage(s"Ping del listener $port")
+            case "do2" =>
+              peerProtocol.get ! PeerProtocol.SendMessage(s"NL-$address-$port")
             case "pause" =>
               rocola.get ! Rocola.Pause()
             case "propose" =>

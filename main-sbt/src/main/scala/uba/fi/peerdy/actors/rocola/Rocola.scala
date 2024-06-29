@@ -32,6 +32,7 @@ object Rocola extends JsonSupport {
   final case class Pause() extends RocolaCommand
   final case class Stop() extends RocolaCommand
   final case class Skip() extends RocolaCommand
+  final case class List() extends RocolaCommand
   final case class VolumeUp() extends RocolaCommand
   final case class VolumeDown() extends RocolaCommand
   final case class Mute() extends RocolaCommand
@@ -64,14 +65,11 @@ object Rocola extends JsonSupport {
                 case Success(value) =>
                   val response = value.parseJson.convertTo[PlaylistResponseMessage]
                   println(s"Response: $response")
-                  system.terminate()
                 case Failure(error) =>
                   println(s"Failed to unmarshal response: $error")
-                  system.terminate()
               }
             case Failure(exception) =>
               println(s"Request failed: $exception")
-              system.terminate()
           }
           Behaviors.same
         case Play() =>
@@ -90,14 +88,11 @@ object Rocola extends JsonSupport {
                     case false => context.log.info(s"Failed to play ${response.message}")
                   }
                   println(s"Response: $response")
-                  system.terminate()
                 case Failure(error) =>
                   println(s"Failed to unmarshal response: $error")
-                  system.terminate()
               }
             case Failure(exception) =>
               println(s"Request failed: $exception")
-              system.terminate()
           }
           Behaviors.same
         case Pause() =>
@@ -116,14 +111,11 @@ object Rocola extends JsonSupport {
                     case false => context.log.info(s"Failed to pause ${response.message}")
                   }
                   println(s"Response: $response")
-                  system.terminate()
                 case Failure(error) =>
                   println(s"Failed to unmarshal response: $error")
-                  system.terminate()
               }
             case Failure(exception) =>
               println(s"Request failed: $exception")
-              system.terminate()
           }
           Behaviors.same
         case Stop() =>
@@ -142,14 +134,11 @@ object Rocola extends JsonSupport {
                     case false => context.log.info(s"Failed to stop ${response.message}")
                   }
                   println(s"Response: $response")
-                  system.terminate()
                 case Failure(error) =>
                   println(s"Failed to unmarshal response: $error")
-                  system.terminate()
               }
             case Failure(exception) =>
               println(s"Request failed: $exception")
-              system.terminate()
           }
           Behaviors.same
         case Skip() =>
@@ -168,14 +157,11 @@ object Rocola extends JsonSupport {
                     case false => context.log.info(s"Failed to skip ${response.message}")
                   }
                   println(s"Response: $response")
-                  system.terminate()
                 case Failure(error) =>
                   println(s"Failed to unmarshal response: $error")
-                  system.terminate()
               }
             case Failure(exception) =>
               println(s"Request failed: $exception")
-              system.terminate()
           }
           Behaviors.same
           Behaviors.same
@@ -195,14 +181,11 @@ object Rocola extends JsonSupport {
                     case false => context.log.info(s"Failed to increase volume ${response.message}")
                   }
                   println(s"Response: $response")
-                  system.terminate()
                 case Failure(error) =>
                   println(s"Failed to unmarshal response: $error")
-                  system.terminate()
               }
             case Failure(exception) =>
               println(s"Request failed: $exception")
-              system.terminate()
           }
           Behaviors.same
         case VolumeDown() =>
@@ -221,14 +204,32 @@ object Rocola extends JsonSupport {
                     case false => context.log.info(s"Failed to decrease volume ${response.message}")
                   }
                   println(s"Response: $response")
-                  system.terminate()
                 case Failure(error) =>
                   println(s"Failed to unmarshal response: $error")
-                  system.terminate()
               }
             case Failure(exception) =>
               println(s"Request failed: $exception")
-              system.terminate()
+          }
+          Behaviors.same
+        case List() =>
+          val uri = Uri(s"http://$directory:$port/list")
+          val request = HttpRequest(method = HttpMethods.GET, uri = uri)
+          val responseFuture: Future[HttpResponse] = http.singleRequest(request)
+
+          responseFuture.onComplete {
+            case Success(response) =>
+              Unmarshal(response.entity).to[String].onComplete {
+                case Success(value) =>
+                  val response = value.parseJson.convertTo[PlaylistResponseMessage]
+                  response.success match {
+                    case true => println(response.playlist)
+                    case false => context.log.info(s"Failed to get list ${response.message}")
+                  }
+                case Failure(error) =>
+                  println(s"Failed to unmarshal response: $error")
+              }
+            case Failure(exception) =>
+              println(s"Request failed: $exception")
           }
           Behaviors.same
         case Mute() =>
@@ -247,14 +248,11 @@ object Rocola extends JsonSupport {
                     case false => context.log.info(s"Failed to mute volume ${response.message}")
                   }
                   println(s"Response: $response")
-                  system.terminate()
                 case Failure(error) =>
                   println(s"Failed to unmarshal response: $error")
-                  system.terminate()
               }
             case Failure(exception) =>
               println(s"Request failed: $exception")
-              system.terminate()
           }
           Behaviors.same
         case Unmute() =>
@@ -273,14 +271,11 @@ object Rocola extends JsonSupport {
                     case false => context.log.info(s"Failed to unmute volume ${response.message}")
                   }
                   println(s"Response: $response")
-                  system.terminate()
                 case Failure(error) =>
                   println(s"Failed to unmarshal response: $error")
-                  system.terminate()
               }
             case Failure(exception) =>
               println(s"Request failed: $exception")
-              system.terminate()
           }
           Behaviors.same
         case SetVolume(volume:Int) =>
@@ -295,18 +290,15 @@ object Rocola extends JsonSupport {
                 case Success(value) =>
                   val response = value.parseJson.convertTo[PlaybackResponseMessage]
                   response.success match {
-                    case true => context.log.info(s"Volume set to $volume")
-                    case false => context.log.info(s"Failed to set volume to $volume ${response.message}")
+                    case true => println(s"Volume set to $volume")
+                    case false => println(s"Failed to set volume to $volume ${response.message}")
                   }
                   println(s"Response: $response")
-                  system.terminate()
                 case Failure(error) =>
                   println(s"Failed to unmarshal response: $error")
-                  system.terminate()
               }
             case Failure(exception) =>
               println(s"Request failed: $exception")
-              system.terminate()
           }
           Behaviors.same
         case SetPlaylist() =>
@@ -325,14 +317,11 @@ object Rocola extends JsonSupport {
                     case false => context.log.info(s"Failed to set playlist ${response.message}")
                   }
                   println(s"Response: $response")
-                  system.terminate()
                 case Failure(error) =>
                   println(s"Failed to unmarshal response: $error")
-                  system.terminate()
               }
             case Failure(exception) =>
               println(s"Request failed: $exception")
-              system.terminate()
           }
           Behaviors.same
       }

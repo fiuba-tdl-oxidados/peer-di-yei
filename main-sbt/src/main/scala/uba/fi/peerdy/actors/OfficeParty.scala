@@ -49,7 +49,7 @@ object OfficeParty extends JsonSupport {
 
   
   // using FP to define behavior as a function in this object
-  def apply(): Behavior[PartyCommand] = {
+  def apply(address: String, clientPort: Int, name: String): Behavior[PartyCommand] = {
     Behaviors.receive { (context, message) =>
       implicit val system: ActorSystem[Nothing] = context.system
       implicit val executionContext: ExecutionContextExecutor = context.executionContext
@@ -73,7 +73,7 @@ object OfficeParty extends JsonSupport {
         
         case RegisterAsDiYei(replyTo) =>
           val uri = Uri(s"http://$directory:$port/register-diyei")
-          val registerRequest = RegisterRequest("MiNombre", "MiHost", 8080)
+          val registerRequest = RegisterRequest(name, address, clientPort)
           val entity = HttpEntity(ContentTypes.`application/json`, registerRequest.toJson.toString)
           
           val request = HttpRequest(method = HttpMethods.POST, uri = uri, entity = entity)
@@ -89,7 +89,7 @@ object OfficeParty extends JsonSupport {
 
         case RegisterAsListener(replyTo, diyei) =>
           val uri = Uri(s"http://$directory:$port/register-listener")
-          val registerRequest = RegisterRequest("MiNombre", "MiHost", 8080)
+          val registerRequest = RegisterRequest(name, address, clientPort)
           val entity = HttpEntity(ContentTypes.`application/json`, registerRequest.toJson.toString)
           
           val request = HttpRequest(method = HttpMethods.POST, uri = uri, entity = entity)
@@ -105,17 +105,14 @@ object OfficeParty extends JsonSupport {
 
         // ListMembers response
         case HandleListMembersResponse(replyTo, Success(value)) =>
-          context.log.info(s"HTTP response received: $value")
           val members = value.parseJson.asJsObject.fields("members").convertTo[List[Member]]
           val diYei = members.find(_.memberType == "DiYei")
 
           diYei match {
             case Some(diYei) =>
-              context.log.info(s"DiYei found: ${diYei.name}")
               context.self ! RegisterAsListener(replyTo, diYei)
               Behaviors.same
             case None =>
-              context.log.info("No DiYei found in the user list")
               context.self ! RegisterAsDiYei(replyTo)
               Behaviors.same
           }
@@ -127,10 +124,9 @@ object OfficeParty extends JsonSupport {
         // RegisterDiYei Response
         case HandleRegisterDiYeiResponse(replyTo, Success(value)) =>
           val registrationResponse = value.parseJson.convertTo[RegistrationResponseMessage]
-          context.log.info(s"Response: $registrationResponse")
           registrationResponse.success match {
             case true =>
-              val diYei = context.spawn(DiYei(), "diyei")
+              val diYei = context.spawn(DiYei(address, clientPort), "diyei")
               replyTo ! NewDiYeiAccepted(diYei)
               Behaviors.same
             case false =>
@@ -144,10 +140,9 @@ object OfficeParty extends JsonSupport {
         // RegisterListener Response
         case HandleRegisterListenerResponse(replyTo, diyei, Success(value)) =>
           val registrationResponse = value.parseJson.convertTo[RegistrationResponseMessage]
-          context.log.info(s"Response: $registrationResponse")
           registrationResponse.success match {
             case true =>
-              val listener = context.spawn(Listener(diyei), "listener")
+              val listener = context.spawn(Listener(address, clientPort, diyei), "listener")
               replyTo ! NewListenerAccepted(listener)
               Behaviors.same
             case false =>

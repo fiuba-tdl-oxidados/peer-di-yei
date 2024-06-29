@@ -1,139 +1,93 @@
-/* 
 package uba.fi.peerdy.actors.protocol
 
-import akka.NotUsed
+import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, ActorSystem, Behavior}
-import akka.actor.typed.scaladsl.{Behaviors, ActorContext}
 import akka.stream.scaladsl.{Flow, Sink, Source, Tcp, SourceQueueWithComplete}
-import akka.stream.{ActorMaterializer, Materializer, SystemMaterializer}
+import akka.stream.{Materializer, OverflowStrategy}
 import akka.util.ByteString
+import scala.util.{Failure, Success}
 import scala.concurrent.ExecutionContextExecutor
 
 object PeerProtocol {
+
   sealed trait Command
-  case class AddConnection(address: String, port: Int) extends Command
-  case class RemoveConnection(connection: ActorRef[Connection.Command]) extends Command
-  case class SendMessageToAll(message: String) extends Command
-  case class ReceivedMessage(connection: ActorRef[Connection.Command], message: String) extends Command
-  case class StartServer(interface: String, port: Int) extends Command
-  case class ClientConnected(connection: ActorRef[Connection.Command]) extends Command
+  final case class Bind(address: String, port: Int) extends Command
+  final case class Connect(address: String, port: Int) extends Command
+  final case class SendMessage(message: String) extends Command
+  private final case class Connected(queue: SourceQueueWithComplete[ByteString]) extends Command
+  private final case class HandleResponse(cause: String) extends Command
+
 
   def apply(): Behavior[Command] = Behaviors.setup { context =>
-    implicit val system = context.system
-    implicit val executionContext = context.executionContext
-    implicit val materializer: Materializer = SystemMaterializer(system).materializer
+    implicit val system: ActorSystem[Nothing] = context.system
+    implicit val executionContext: ExecutionContextExecutor = context.executionContext
+    implicit val materializer: Materializer = Materializer(context)
     val tcp = Tcp(system)
 
-    var connections: Set[ActorRef[Connection.Command]] = Set.empty
+    var connections: List[SourceQueueWithComplete[ByteString]] = List.empty
 
     Behaviors.receiveMessage {
-      case AddConnection(address, port) =>
-        val connection = context.spawn(Connection(address, port, context.self), s"connection-$address-$port")
-        connections += connection
+      // Server
+      case Bind(address, port) =>
+        val connections = tcp.bind(address, port)
+        connections.runForeach { connection =>
+          val handler = Flow[ByteString]
+            .map { bs =>
+              val receivedMessage = bs.utf8String.trim
+              println(s"Received: $receivedMessage")
+
+              val args = receivedMessage.split("-")
+              val cmd = args(0)
+              cmd match {
+                case "NL" =>
+                  println(args)
+                  // context.self ! Connect(args(1), args(2).toInt)
+              }
+
+              // Echo the received message back to the client
+              val response = ByteString(s"Echo: $receivedMessage\n")
+              response
+            }
+            .alsoTo(Sink.onComplete(_ => println("Connection closed.")))
+
+          connection.handleWith(handler)
+        }
         Behaviors.same
 
-      case RemoveConnection(connection) =>
-        connections -= connection
+      // Client
+      case Connect(address, port) =>
+        val outgoingConnection = tcp.outgoingConnection(address, port)
+
+        val (queue, source) = Source.queue[ByteString](10, OverflowStrategy.dropNew)
+        .preMaterialize()
+
+        val connectionFuture = source
+          .via(outgoingConnection)
+          .to(Sink.foreach { response =>
+            context.self ! HandleResponse(response.utf8String)
+          })
+          .run()(materializer)
+
+        context.self ! Connected(queue)
         Behaviors.same
 
-      case SendMessageToAll(message) =>
-        connections.foreach(_ ! Connection.WriteMessage(message))
+      case Connected(queue) =>
+        connections = connections :+ queue
+        println("Connected to DiYeiProtocol server")
         Behaviors.same
 
-      case ReceivedMessage(connection, message) =>
-        context.log.info(s"Received message from $connection: $message")
+      case HandleResponse(response) =>
+        context.log.info("Received response from server: {}", response)
         Behaviors.same
 
-      case StartServer(host, port) =>
-        val binding = tcp.bind(host, port)
-        binding.to(Sink.foreach { connection =>
-          val handler = context.spawn(ConnectionHandler(context.self), s"handler-${connection.remoteAddress}")
-          handler ! ConnectionHandler.HandleConnection(connection)
-        }).run()
-        context.log.info(s"Server started at $host:$port")
-        Behaviors.same
-
-      case ClientConnected(connection) =>
-        connections += connection
+      case SendMessage(message) =>
+        connections.foreach { queue =>
+          queue.offer(ByteString(message)).onComplete {
+              case Success(result) => println("Message sent: {}", result)
+              case Failure(exception) => context.log.error("Failed to send message: {}", exception)
+            }
+        }
         Behaviors.same
     }
   }
 }
-
-object Connection {
-  sealed trait Command
-  case class WriteMessage(message: String) extends Command
-  private case class WrappedReceivedMessage(message: String) extends Command
-
-  def apply(address: String, port: Int, replyTo: ActorRef[PeerProtocol.Command]): Behavior[Command] = Behaviors.setup { context =>
-    implicit val system = context.system
-    implicit val executionContext = context.executionContext
-    implicit val materializer: Materializer = SystemMaterializer(system).materializer
-    val tcp = Tcp(system)
-
-    val connectionFlow = tcp.outgoingConnection(address, port)
-    val (writeQueue, source): (SourceQueueWithComplete[ByteString], Source[ByteString, NotUsed]) = 
-      Source.queue[ByteString](bufferSize = 10).preMaterialize()
-    val sink = Flow[ByteString]
-      .map(bytes => WrappedReceivedMessage(bytes.utf8String))
-      .to(Sink.actorRef(context.self, onCompleteMessage = Behaviors.stopped))
-
-    source.via(connectionFlow).to(sink).run()
-
-    Behaviors.receiveMessage {
-      case WriteMessage(message) =>
-        writeQueue.offer(ByteString(message))
-        Behaviors.same
-
-      case WrappedReceivedMessage(message) =>
-        replyTo ! PeerProtocol.ReceivedMessage(context.self, message)
-        Behaviors.same
-    }
-  }
-}
-
-object ConnectionHandler {
-  sealed trait Command
-  case class HandleConnection(connection: Tcp.IncomingConnection) extends Command
-
-  def apply(peerProtocol: ActorRef[PeerProtocol.Command]): Behavior[Command] = Behaviors.setup { context =>
-    implicit val system = context.system
-    implicit val executionContext = context.executionContext
-    implicit val materializer: Materializer = SystemMaterializer(system).materializer
-    val tcp = Tcp(system)
-
-    Behaviors.receiveMessage {
-      case HandleConnection(connection) =>
-        val handler = context.spawn(ConnectionActor(connection, peerProtocol), s"connection-${connection.remoteAddress}")
-        connection.handleWith(Flow[ByteString]
-          .map { bytes =>
-            handler ! ConnectionActor.IncomingMessage(bytes.utf8String)
-            bytes
-          }
-          .mapMaterializedValue(_ => handler)
-        )
-        Behaviors.same
-    }
-  }
-}
-
-object ConnectionActor {
-  sealed trait Command
-  case class IncomingMessage(message: String) extends Command
-
-  def apply(connection: Tcp.IncomingConnection, peerProtocol: ActorRef[PeerProtocol.Command]): Behavior[Command] = Behaviors.setup { context =>
-    implicit val system = context.system
-    implicit val executionContext = context.executionContext
-    implicit val materializer: Materializer = SystemMaterializer(system).materializer
-    val tcp = Tcp(system)
-    
-    peerProtocol ! PeerProtocol.ClientConnected(context.self)
-
-    Behaviors.receiveMessage {
-      case IncomingMessage(message) =>
-        peerProtocol ! PeerProtocol.ReceivedMessage(context.self, message)
-        Behaviors.same
-    }
-  }
-}
-  */

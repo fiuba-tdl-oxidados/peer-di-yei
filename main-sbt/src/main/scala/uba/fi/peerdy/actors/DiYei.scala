@@ -6,43 +6,52 @@ import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.{HttpMethods, HttpRequest, Uri}
 import akka.http.scaladsl.unmarshalling.Unmarshal
 import akka.util.Timeout
-import uba.fi.peerdy.actors.rocola.Rocola
 
 import scala.concurrent.Future
 import scala.concurrent.duration.DurationInt
 import scala.util.{Failure, Success, Try}
-import java.net.URLEncoder
 import scala.collection.mutable
-object DiYei {
+import java.net.URLEncoder
 
+import uba.fi.peerdy.actors.rocola.Rocola
+import uba.fi.peerdy.actors.protocol.PeerProtocol
+
+object DiYei {
   sealed trait DiYeiCommand
   final case class ShowCommands() extends DiYeiCommand
   final case class ProcessCommand(cmd: String) extends DiYeiCommand
 
-
   private var rocola: Option[ActorRef[Rocola.RocolaCommand]] = Option.empty
 
-  def apply(): Behavior[DiYeiCommand] = {
+  def apply(address: String, port: Int): Behavior[DiYeiCommand] = {
     Behaviors.setup { context =>
-      // var peerProtocol: ActorRef[PeerProtocol.Command] = context.spawn(PeerProtocol(), "peerProtocol")
-      // peerProtocol ! PeerProtocol.StartServer("localhost", 8081)
+      var peerProtocol: ActorRef[PeerProtocol.Command] = context.spawn(PeerProtocol(), "peerProtocol")
+      peerProtocol ! PeerProtocol.Bind(address, port)
 
       rocola match {
         case Some(_) =>
-          context.log.info("Rocola found")
         case None =>
-          context.log.info("No Rocola available, creating...")
           rocola = Option { context.spawn(Rocola(), "diyeiRocola") }
       }
       Behaviors.receiveMessage {
         case ShowCommands() =>
           println("Available commands:")
-          println("play - Play playlist")
-          println("pause - Pause playlist")
-          println("commands - List available commands")
-          println("exit - Exit the system")
+          println("commands | List available commands")
+          println("play | Play playlist")
+          println("pause | Pause playlist")
+          println("skip | Skip to next song")
+          println("list | List the playlist")
+          println("volumeup | Adds 1 to the current volume")
+          println("volumedown | Takes away 1 to the current volume")
+          println("volume N | Set the volume to N")
+          println("mute | Mutes")
+          println("unmute | Unmutes")
+          println("propose <song> <artist> | Pause playlist")
+          println("exit | Exit the system")
           Behaviors.same
-        case ProcessCommand(cmd) =>
+        case ProcessCommand(msg) =>
+          val args = msg.split(" ")
+          val cmd = args(0)
           cmd match {
             case "commands" =>
               context.self ! ShowCommands()
@@ -50,12 +59,24 @@ object DiYei {
               rocola.get ! Rocola.Play()
             case "pause" =>
               rocola.get ! Rocola.Pause()
+            case "skip" =>
+              rocola.get ! Rocola.Skip()
+            case "list" =>
+              rocola.get ! Rocola.List()
+            case "volumeup" =>
+              rocola.get ! Rocola.VolumeUp()
+            case "volumedown" =>
+              rocola.get ! Rocola.VolumeDown()
+            case "volume" =>
+              rocola.get ! Rocola.SetVolume(args(1).toInt)
+            case "mute" =>
+              rocola.get ! Rocola.Mute()
+            case "unmute" =>
+              rocola.get ! Rocola.Unmute()
             case "propose" =>
-              println("Enter song name: ")
-              val song = scala.io.StdIn.readLine()
-              println("Enter artist name: ")
-              val artist = scala.io.StdIn.readLine()
-              rocola.get ! Rocola.EnqueueSong(song, artist)
+              rocola.get ! Rocola.EnqueueSong(args(1), args(2))
+            case "do" =>
+              PeerProtocol.SendMessage("Ping del diYei")
             case _ =>
               context.log.info("Invalid command")
           }
