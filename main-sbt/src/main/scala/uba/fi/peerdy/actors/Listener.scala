@@ -5,31 +5,32 @@ import akka.actor.typed.scaladsl.Behaviors
 import uba.fi.peerdy.actors.rocola.Rocola
 import uba.fi.peerdy.actors.Member
 import uba.fi.peerdy.actors.protocol.PeerProtocol
+import scala.concurrent.{ExecutionContextExecutor, Future, Promise}
+import scala.util.{Failure, Success}
 
 object Listener {
   sealed trait ListenerCommand
   final case class ShowCommands() extends ListenerCommand
   final case class ProcessCommand(cmd: String) extends ListenerCommand
 
-  private var rocola: Option[ActorRef[Rocola.RocolaCommand]] = Option.empty
-  private var peerProtocol: Option[ActorRef[PeerProtocol.Command]] = Option.empty
-
 
   def apply(address: String, port: Int, diyei: Member): Behavior[ListenerCommand] = {
     Behaviors.setup { context =>
-      peerProtocol match {
-        case Some(_) =>
-        case None =>
-          peerProtocol = Option { context.spawn(PeerProtocol(), "PeerProtocol") }
-          peerProtocol.get ! PeerProtocol.Bind(address, port)
-          peerProtocol.get ! PeerProtocol.Connect(diyei.ip, diyei.port)
+      implicit val executionContext: ExecutionContextExecutor = context.executionContext
+      
+      var rocola: ActorRef[Rocola.RocolaCommand] = context.spawn(Rocola(), "listenersRocola")
+
+      var peerProtocol: ActorRef[PeerProtocol.Command] = context.spawn(PeerProtocol(), "peerProtocol")
+      peerProtocol ! PeerProtocol.Bind(address, port)
+      
+      val promise = Promise[Unit]()
+      val future: Future[Unit] = promise.future
+      peerProtocol ! PeerProtocol.Connect(diyei.ip, diyei.port, promise)
+      future.onComplete {
+        case Success(_) => peerProtocol ! PeerProtocol.SendMessage(s"NL-$address-$port")
+        case Failure(exception) => println("ACA FALLO")
       }
 
-      rocola match {
-        case Some(_) =>
-        case None =>
-          rocola = Option { context.spawn(Rocola(), "listenersRocola") }
-      }
       Behaviors.receiveMessage {
         case ShowCommands() =>
           println("Available commands:")
@@ -40,19 +41,19 @@ object Listener {
             case "commands" =>
               context.self ! ShowCommands()
             case "play" =>
-              rocola.get ! Rocola.Play()
-            case "do" =>
-              peerProtocol.get ! PeerProtocol.SendMessage(s"Ping del listener $port")
-            case "do2" =>
-              peerProtocol.get ! PeerProtocol.SendMessage(s"NL-$address-$port")
+              rocola ! Rocola.Play()
+            case "ping" =>
+              peerProtocol ! PeerProtocol.SendMessage(s"Ping del listener $port")
+            case "present" =>
+              peerProtocol ! PeerProtocol.SendMessage(s"NL-$address-$port")
             case "pause" =>
-              rocola.get ! Rocola.Pause()
+              rocola ! Rocola.Pause()
             case "propose" =>
               println("Enter song name: ")
               val song = scala.io.StdIn.readLine()
               println("Enter artist name: ")
               val artist = scala.io.StdIn.readLine()
-              rocola.get ! Rocola.EnqueueSong(song, artist)
+              rocola ! Rocola.EnqueueSong(song, artist)
             case _ =>
               context.log.info("Invalid command")
           }

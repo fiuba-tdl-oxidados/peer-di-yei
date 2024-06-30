@@ -21,18 +21,13 @@ object DiYei {
   final case class ShowCommands() extends DiYeiCommand
   final case class ProcessCommand(cmd: String) extends DiYeiCommand
 
-  private var rocola: Option[ActorRef[Rocola.RocolaCommand]] = Option.empty
-
   def apply(address: String, port: Int): Behavior[DiYeiCommand] = {
     Behaviors.setup { context =>
+      var rocola: ActorRef[Rocola.RocolaCommand] = context.spawn(Rocola(), "diyeiRocola")
+
       var peerProtocol: ActorRef[PeerProtocol.Command] = context.spawn(PeerProtocol(), "peerProtocol")
       peerProtocol ! PeerProtocol.Bind(address, port)
 
-      rocola match {
-        case Some(_) =>
-        case None =>
-          rocola = Option { context.spawn(Rocola(), "diyeiRocola") }
-      }
       Behaviors.receiveMessage {
         case ShowCommands() =>
           println("Available commands:")
@@ -56,27 +51,27 @@ object DiYei {
             case "commands" =>
               context.self ! ShowCommands()
             case "play" =>
-              rocola.get ! Rocola.Play()
+              rocola ! Rocola.Play()
             case "pause" =>
-              rocola.get ! Rocola.Pause()
+              rocola ! Rocola.Pause()
             case "skip" =>
-              rocola.get ! Rocola.Skip()
+              rocola ! Rocola.Skip()
             case "list" =>
-              rocola.get ! Rocola.List()
+              rocola ! Rocola.List()
             case "volumeup" =>
-              rocola.get ! Rocola.VolumeUp()
+              rocola ! Rocola.VolumeUp()
             case "volumedown" =>
-              rocola.get ! Rocola.VolumeDown()
+              rocola ! Rocola.VolumeDown()
             case "volume" =>
-              rocola.get ! Rocola.SetVolume(args(1).toInt)
+              rocola ! Rocola.SetVolume(args(1).toInt)
             case "mute" =>
-              rocola.get ! Rocola.Mute()
+              rocola ! Rocola.Mute()
             case "unmute" =>
-              rocola.get ! Rocola.Unmute()
+              rocola ! Rocola.Unmute()
             case "propose" =>
-              rocola.get ! Rocola.EnqueueSong(args(1), args(2))
+              rocola ! Rocola.EnqueueSong(args(1), args(2))
             case "do" =>
-              PeerProtocol.SendMessage("Ping del diYei")
+              peerProtocol ! PeerProtocol.SendMessage("Ping del diYei")
             case _ =>
               context.log.info("Invalid command")
           }
