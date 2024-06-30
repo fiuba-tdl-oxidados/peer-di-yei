@@ -1,9 +1,14 @@
 package uba.fi.peerdy.actors
 
-import uba.fi.peerdy.actors.DiYei.{ProcessCommand, ShowCommands}
+
+import akka.actor.typed.{ActorRef, Behavior}
+import akka.actor.typed.scaladsl.Behaviors
 import uba.fi.peerdy.actors.rocola.Rocola
 import uba.fi.peerdy.actors.Member
 import uba.fi.peerdy.actors.protocol.PeerProtocol
+import scala.concurrent.{ExecutionContextExecutor, Future, Promise}
+import scala.util.{Failure, Success}
+
 
 object Listener {
   sealed trait ListenerCommand
