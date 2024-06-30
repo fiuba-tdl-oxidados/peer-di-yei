@@ -2,38 +2,63 @@ package uba.fi.peerdy.actors
 
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.Behaviors
+import uba.fi.peerdy.actors.rocola.Rocola
+import uba.fi.peerdy.actors.Member
+import uba.fi.peerdy.actors.protocol.PeerProtocol
+import scala.concurrent.{ExecutionContextExecutor, Future, Promise}
+import scala.util.{Failure, Success}
 
 object Listener {
-
   sealed trait ListenerCommand
-  final case class RequestPlaylist(replyTo: ActorRef[ListenerResponse]) extends ListenerCommand
-  final case class VoteSong(songId: String, vote: Boolean, replyTo: ActorRef[ListenerResponse]) extends ListenerCommand
-  final case class ProposeSong(song: String, replyTo: ActorRef[ListenerResponse]) extends ListenerCommand
-  final case class RequestDJChange(replyTo: ActorRef[ListenerResponse]) extends ListenerCommand
+  final case class ShowCommands() extends ListenerCommand
+  final case class ProcessCommand(cmd: String) extends ListenerCommand
 
-  sealed trait ListenerResponse
-  final case class PlaylistResponse(playlist: List[String]) extends ListenerResponse
-  final case class VoteResponse(success: Boolean) extends ListenerResponse
-  final case class ProposeSongResponse(success: Boolean) extends ListenerResponse
-  final case class DJChangeResponse(success: Boolean) extends ListenerResponse
 
-  def apply(dj: ActorRef[DiYei.DiYeiCommand]): Behavior[ListenerCommand] = Behaviors.receive { (context, message) =>
-    message match {
-      case RequestPlaylist(replyTo) =>
-        dj ! DiYei.ProposeSong("listener", "request playlist", "artist")
-        replyTo ! PlaylistResponse(List("Song1", "Song2"))
-        Behaviors.same
-      case VoteSong(songId, vote, replyTo) =>
-        context.log.info(s"Voting song $songId with vote: $vote")
-        replyTo ! VoteResponse(success = true)
-        Behaviors.same
-      case ProposeSong(song, replyTo) =>
-        dj ! DiYei.ProposeSong("listener", song, "artist")
-        replyTo ! ProposeSongResponse(success = true)
-        Behaviors.same
-      case RequestDJChange(replyTo) =>
-        replyTo ! DJChangeResponse(success = false)
-        Behaviors.same
+  def apply(address: String, port: Int, diyei: Member): Behavior[ListenerCommand] = {
+    Behaviors.setup { context =>
+      implicit val executionContext: ExecutionContextExecutor = context.executionContext
+      
+      var rocola: ActorRef[Rocola.RocolaCommand] = context.spawn(Rocola(), "listenersRocola")
+
+      var peerProtocol: ActorRef[PeerProtocol.Command] = context.spawn(PeerProtocol(), "peerProtocol")
+      peerProtocol ! PeerProtocol.Bind(address, port)
+      
+      val promise = Promise[Unit]()
+      val future: Future[Unit] = promise.future
+      peerProtocol ! PeerProtocol.Connect(diyei.ip, diyei.port, promise)
+      future.onComplete {
+        case Success(_) => peerProtocol ! PeerProtocol.SendMessage(s"NL-$address-$port")
+        case Failure(exception) => println("ACA FALLO")
+      }
+
+      Behaviors.receiveMessage {
+        case ShowCommands() =>
+          println("Available commands:")
+          println("exit - Exit the system")
+          Behaviors.same
+        case ProcessCommand(cmd) =>
+          cmd match {
+            case "commands" =>
+              context.self ! ShowCommands()
+            case "play" =>
+              rocola ! Rocola.Play()
+            case "ping" =>
+              peerProtocol ! PeerProtocol.SendMessage(s"Ping del listener $port")
+            case "present" =>
+              peerProtocol ! PeerProtocol.SendMessage(s"NL-$address-$port")
+            case "pause" =>
+              rocola ! Rocola.Pause()
+            case "propose" =>
+              println("Enter song name: ")
+              val song = scala.io.StdIn.readLine()
+              println("Enter artist name: ")
+              val artist = scala.io.StdIn.readLine()
+              rocola ! Rocola.EnqueueSong(song, artist)
+            case _ =>
+              context.log.info("Invalid command")
+          }
+          Behaviors.same
+      }
     }
   }
 }
