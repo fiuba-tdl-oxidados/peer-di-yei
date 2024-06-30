@@ -70,8 +70,6 @@ object DiYei {
               rocola ! Rocola.Unmute()
             case "propose" =>
               rocola ! Rocola.EnqueueSong(args(1), args(2))
-            case "do" =>
-              peerProtocol ! PeerProtocol.SendMessage("Ping del diYei")
             case _ =>
               context.log.info("Invalid command")
           }
